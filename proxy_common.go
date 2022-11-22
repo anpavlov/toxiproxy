@@ -39,7 +39,6 @@ type proxyInternal interface {
 	setTomb(tomb *tomb.Tomb)
 	getTomb() *tomb.Tomb
 	server()
-	// TODO naming?
 	startedCh() chan error
 	getConnections() *ConnectionList
 }
