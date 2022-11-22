@@ -22,7 +22,7 @@ import (
 	"github.com/Shopify/toxiproxy/v2/toxics"
 )
 
-func NewTestProxy(name, upstream string) *toxiproxy.ProxyTCP {
+func NewTestProxy(name, upstream string) toxiproxy.Proxy {
 	log := zerolog.Nop()
 	if flag.Lookup("test.v").DefValue == "true" {
 		log = zerolog.New(os.Stdout).With().Caller().Timestamp().Logger()
@@ -32,7 +32,7 @@ func NewTestProxy(name, upstream string) *toxiproxy.ProxyTCP {
 		log,
 	)
 	srv.Metrics.ProxyMetrics = collectors.NewProxyMetricCollectors()
-	proxy := toxiproxy.NewProxy(srv, name, "localhost:0", upstream)
+	proxy := toxiproxy.NewProxyTCP(srv, name, "localhost:0", upstream)
 
 	return proxy
 }
@@ -83,7 +83,7 @@ func WithEchoServer(t *testing.T, f func(string, chan []byte)) {
 
 func WithEchoProxy(
 	t *testing.T,
-	f func(proxy net.Conn, response chan []byte, proxyServer *toxiproxy.ProxyTCP),
+	f func(proxy net.Conn, response chan []byte, proxyServer toxiproxy.Proxy),
 ) {
 	WithEchoServer(t, func(upstream string, response chan []byte) {
 		proxy := NewTestProxy("test", upstream)

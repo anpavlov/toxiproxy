@@ -35,7 +35,7 @@ func AssertDeltaTime(t *testing.T, message string, actual, expected, delta time.
 }
 
 func DoLatencyTest(t *testing.T, upLatency, downLatency *toxics.LatencyToxic) {
-	WithEchoProxy(t, func(conn net.Conn, response chan []byte, proxy *toxiproxy.ProxyTCP) {
+	WithEchoProxy(t, func(conn net.Conn, response chan []byte, proxy toxiproxy.Proxy) {
 		if upLatency == nil {
 			upLatency = &toxics.LatencyToxic{}
 		} else {
@@ -176,7 +176,7 @@ func TestLatencyToxicCloseRace(t *testing.T) {
 }
 
 func TestTwoLatencyToxics(t *testing.T) {
-	WithEchoProxy(t, func(conn net.Conn, response chan []byte, proxy *toxiproxy.ProxyTCP) {
+	WithEchoProxy(t, func(conn net.Conn, response chan []byte, proxy toxiproxy.Proxy) {
 		toxics := []*toxics.LatencyToxic{{Latency: 500}, {Latency: 500}}
 		for i, toxic := range toxics {
 			_, err := proxy.Toxics().AddToxicJson(

@@ -21,7 +21,7 @@ func TestProxyMetricsReceivedSentBytes(t *testing.T) {
 	srv := NewServer(NewMetricsContainer(prometheus.NewRegistry()), zerolog.Nop())
 	srv.Metrics.ProxyMetrics = collectors.NewProxyMetricCollectors()
 
-	proxy := NewProxy(srv, "test_proxy_metrics_received_sent_bytes", "localhost:0", "upstream")
+	proxy := NewProxyTCP(srv, "test_proxy_metrics_received_sent_bytes", "localhost:0", "upstream")
 
 	r := bufio.NewReader(bytes.NewBufferString("hello"))
 	w := &testWriteCloser{

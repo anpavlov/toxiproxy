@@ -22,7 +22,7 @@ func NewTestProxy(name, upstream string) toxiproxy.Proxy {
 		log,
 	)
 	srv.Metrics.ProxyMetrics = collectors.NewProxyMetricCollectors()
-	proxy := toxiproxy.NewProxy(srv, name, "localhost:0", upstream)
+	proxy := toxiproxy.NewProxyTCP(srv, name, "localhost:0", upstream)
 
 	return proxy
 }

@@ -13,7 +13,7 @@ import (
 	"github.com/Shopify/toxiproxy/v2/toxics"
 )
 
-func WithEstablishedProxy(t *testing.T, f func(net.Conn, net.Conn, *toxiproxy.ProxyTCP)) {
+func WithEstablishedProxy(t *testing.T, f func(net.Conn, net.Conn, toxiproxy.Proxy)) {
 	ln, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatal("Failed to create TCP server", err)
@@ -69,7 +69,7 @@ func WithEstablishedProxy(t *testing.T, f func(net.Conn, net.Conn, *toxiproxy.Pr
 }
 
 func TestTimeoutToxicDoesNotCauseHang(t *testing.T) {
-	WithEstablishedProxy(t, func(conn, _ net.Conn, proxy *toxiproxy.ProxyTCP) {
+	WithEstablishedProxy(t, func(conn, _ net.Conn, proxy toxiproxy.Proxy) {
 		proxy.Toxics().AddToxicJson(
 			ToxicToJson(t, "might_block", "latency", "upstream", &toxics.LatencyToxic{Latency: 10}),
 		)
@@ -95,7 +95,7 @@ func TestTimeoutToxicDoesNotCauseHang(t *testing.T) {
 }
 
 func TestTimeoutToxicClosesConnectionOnRemove(t *testing.T) {
-	WithEstablishedProxy(t, func(conn, serverConn net.Conn, proxy *toxiproxy.ProxyTCP) {
+	WithEstablishedProxy(t, func(conn, serverConn net.Conn, proxy toxiproxy.Proxy) {
 		proxy.Toxics().AddToxicJson(
 			ToxicToJson(t, "to_delete", "timeout", "upstream", &toxics.TimeoutToxic{Timeout: 0}),
 		)

@@ -97,7 +97,7 @@ func (collection *ProxyCollection) PopulateJson(
 	proxies := make([]Proxy, 0, len(input))
 
 	for i := range input {
-		proxy := NewProxy(server, input[i].Name, input[i].Listen, input[i].Upstream)
+		proxy := NewProxyTCP(server, input[i].Name, input[i].Listen, input[i].Upstream)
 		err = collection.AddOrReplace(proxy, *input[i].Enabled)
 		if err != nil {
 			return proxies, err

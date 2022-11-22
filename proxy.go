@@ -1,10 +1,9 @@
 package toxiproxy
 
 import (
+	"io"
 	"net"
-	"sync"
 
-	"github.com/rs/zerolog"
 	tomb "gopkg.in/tomb.v1"
 
 	"github.com/Shopify/toxiproxy/v2/stream"
@@ -16,77 +15,12 @@ import (
 //
 // Client <-> toxiproxy <-> Upstream.
 type ProxyTCP struct {
-	sync.Mutex
-
-	name     string
-	listen   string
-	upstream string
-	enabled  bool
+	proxyBase
 
 	listener net.Listener
-	started  chan error
-
-	tomb        *tomb.Tomb
-	connections ConnectionList
-	toxics      *ToxicCollection
-	apiServer   *ApiServer
-	logger      *zerolog.Logger
 }
 
-func (proxy *ProxyTCP) Name() string {
-	return proxy.name
-}
-
-func (proxy *ProxyTCP) Listen() string {
-	return proxy.listen
-}
-
-func (proxy *ProxyTCP) Upstream() string {
-	return proxy.upstream
-}
-
-func (proxy *ProxyTCP) Enabled() bool {
-	return proxy.enabled
-}
-
-func (proxy *ProxyTCP) Logger() *zerolog.Logger {
-	return proxy.logger
-}
-
-func (proxy *ProxyTCP) Toxics() *ToxicCollection {
-	return proxy.toxics
-}
-
-func (proxy *ProxyTCP) getTomb() *tomb.Tomb {
-	return proxy.tomb
-}
-
-func (proxy *ProxyTCP) setTomb(tomb *tomb.Tomb) {
-	proxy.tomb = tomb
-}
-
-func (proxy *ProxyTCP) getConnections() *ConnectionList {
-	return &proxy.connections
-}
-
-func (proxy *ProxyTCP) startedCh() chan error {
-	return proxy.started
-}
-
-func (proxy *ProxyTCP) toggle(enable bool) {
-	proxy.enabled = enable
-}
-
-func (proxy *ProxyTCP) Config() ProxyConfig {
-	return ProxyConfig{
-		Enabled:  proxy.Enabled(),
-		Name:     proxy.Name(),
-		Listen:   proxy.Listen(),
-		Upstream: proxy.Upstream(),
-	}
-}
-
-func NewProxy(server *ApiServer, name, listen, upstream string) *ProxyTCP {
+func NewProxyTCP(server *ApiServer, name, listen, upstream string) Proxy {
 	l := server.Logger.
 		With().
 		Str("name", name).
@@ -95,13 +29,15 @@ func NewProxy(server *ApiServer, name, listen, upstream string) *ProxyTCP {
 		Logger()
 
 	proxy := &ProxyTCP{
-		name:        name,
-		listen:      listen,
-		upstream:    upstream,
-		started:     make(chan error),
-		connections: ConnectionList{list: make(map[string]net.Conn)},
-		apiServer:   server,
-		logger:      &l,
+		proxyBase: proxyBase{
+			name:        name,
+			listen:      listen,
+			upstream:    upstream,
+			started:     make(chan error),
+			connections: ConnectionList{list: make(map[string]io.Closer)},
+			apiServer:   server,
+			logger:      &l,
+		},
 	}
 	proxy.toxics = NewToxicCollection(proxy)
 	return proxy
@@ -115,22 +51,7 @@ func (proxy *ProxyTCP) Start() error {
 }
 
 func (proxy *ProxyTCP) Update(input ProxyConfig) error {
-	proxy.Lock()
-	defer proxy.Unlock()
-
-	if input.Listen != proxy.listen || input.Upstream != proxy.upstream {
-		stop(proxy)
-		proxy.listen = input.Listen
-		proxy.upstream = input.Upstream
-	}
-
-	if input.Enabled != proxy.enabled {
-		if input.Enabled {
-			return start(proxy)
-		}
-		stop(proxy)
-	}
-	return nil
+	return proxy.proxyBase.Update(input, proxy)
 }
 
 func (proxy *ProxyTCP) Stop() {
@@ -240,45 +161,4 @@ func (proxy *ProxyTCP) server() {
 		proxy.toxics.StartLink(proxy.apiServer, name+"upstream", client, upstream, stream.Upstream)
 		proxy.toxics.StartLink(proxy.apiServer, name+"downstream", upstream, client, stream.Downstream)
 	}
-}
-
-func (proxy *ProxyTCP) RemoveConnection(name string) {
-	proxy.connections.Lock()
-	defer proxy.connections.Unlock()
-	delete(proxy.connections.list, name)
-}
-
-// Starts a proxy, assumes the lock has already been taken.
-func start(proxy proxy) error {
-	if proxy.Enabled() {
-		return ErrProxyAlreadyStarted
-	}
-
-	proxy.setTomb(&tomb.Tomb{}) // Reset tomb, from previous starts/stops
-	go proxy.server()
-	err := <-proxy.startedCh()
-	// Only enable the proxy if it successfully started
-	proxy.toggle(err == nil)
-	return err
-}
-
-// Stops a proxy, assumes the lock has already been taken.
-func stop(proxy proxy) {
-	if !proxy.Enabled() {
-		return
-	}
-	proxy.toggle(false)
-
-	proxy.getTomb().Killf("Shutting down from stop()")
-	proxy.getTomb().Wait() // Wait until we stop accepting new connections
-
-	proxy.getConnections().Lock()
-	defer proxy.getConnections().Unlock()
-	for _, conn := range proxy.getConnections().list {
-		conn.Close()
-	}
-
-	proxy.Logger().
-		Info().
-		Msg("Terminated proxy")
 }
