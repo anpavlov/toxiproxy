@@ -14,20 +14,20 @@ import (
 type ProxyCollection struct {
 	sync.RWMutex
 
-	proxies map[string]*Proxy
+	proxies map[string]Proxy
 }
 
 func NewProxyCollection() *ProxyCollection {
 	return &ProxyCollection{
-		proxies: make(map[string]*Proxy),
+		proxies: make(map[string]Proxy),
 	}
 }
 
-func (collection *ProxyCollection) Add(proxy *Proxy, start bool) error {
+func (collection *ProxyCollection) Add(proxy Proxy, start bool) error {
 	collection.Lock()
 	defer collection.Unlock()
 
-	if _, exists := collection.proxies[proxy.Name]; exists {
+	if _, exists := collection.proxies[proxy.Name()]; exists {
 		return ErrProxyAlreadyExists
 	}
 
@@ -38,17 +38,17 @@ func (collection *ProxyCollection) Add(proxy *Proxy, start bool) error {
 		}
 	}
 
-	collection.proxies[proxy.Name] = proxy
+	collection.proxies[proxy.Name()] = proxy
 
 	return nil
 }
 
-func (collection *ProxyCollection) AddOrReplace(proxy *Proxy, start bool) error {
+func (collection *ProxyCollection) AddOrReplace(proxy Proxy, start bool) error {
 	collection.Lock()
 	defer collection.Unlock()
 
-	if existing, exists := collection.proxies[proxy.Name]; exists {
-		if existing.Listen == proxy.Listen && existing.Upstream == proxy.Upstream {
+	if existing, exists := collection.proxies[proxy.Name()]; exists {
+		if existing.Listen() == proxy.Listen() && existing.Upstream() == proxy.Upstream() {
 			return nil
 		}
 		existing.Stop()
@@ -61,7 +61,7 @@ func (collection *ProxyCollection) AddOrReplace(proxy *Proxy, start bool) error 
 		}
 	}
 
-	collection.proxies[proxy.Name] = proxy
+	collection.proxies[proxy.Name()] = proxy
 
 	return nil
 }
@@ -69,9 +69,9 @@ func (collection *ProxyCollection) AddOrReplace(proxy *Proxy, start bool) error 
 func (collection *ProxyCollection) PopulateJson(
 	server *ApiServer,
 	data io.Reader,
-) ([]*Proxy, error) {
+) ([]Proxy, error) {
 	input := []struct {
-		Proxy
+		ProxyConfig
 		Enabled *bool `json:"enabled"` // Overrides Proxy field to make field nullable
 	}{}
 
@@ -94,7 +94,7 @@ func (collection *ProxyCollection) PopulateJson(
 		}
 	}
 
-	proxies := make([]*Proxy, 0, len(input))
+	proxies := make([]Proxy, 0, len(input))
 
 	for i := range input {
 		proxy := NewProxy(server, input[i].Name, input[i].Listen, input[i].Upstream)
@@ -108,19 +108,19 @@ func (collection *ProxyCollection) PopulateJson(
 	return proxies, err
 }
 
-func (collection *ProxyCollection) Proxies() map[string]*Proxy {
+func (collection *ProxyCollection) Proxies() map[string]Proxy {
 	collection.RLock()
 	defer collection.RUnlock()
 
 	// Copy the map since using the existing one isn't thread-safe
-	proxies := make(map[string]*Proxy, len(collection.proxies))
+	proxies := make(map[string]Proxy, len(collection.proxies))
 	for k, v := range collection.proxies {
 		proxies[k] = v
 	}
 	return proxies
 }
 
-func (collection *ProxyCollection) Get(name string) (*Proxy, error) {
+func (collection *ProxyCollection) Get(name string) (Proxy, error) {
 	collection.RLock()
 	defer collection.RUnlock()
 
@@ -137,7 +137,7 @@ func (collection *ProxyCollection) Remove(name string) error {
 	}
 	proxy.Stop()
 
-	delete(collection.proxies, proxy.Name)
+	delete(collection.proxies, proxy.Name())
 	return nil
 }
 
@@ -148,7 +148,7 @@ func (collection *ProxyCollection) Clear() error {
 	for _, proxy := range collection.proxies {
 		proxy.Stop()
 
-		delete(collection.proxies, proxy.Name)
+		delete(collection.proxies, proxy.Name())
 	}
 
 	return nil
@@ -156,7 +156,7 @@ func (collection *ProxyCollection) Clear() error {
 
 // getByName returns a proxy by its name. Its used from #remove and #get.
 // It assumes the lock has already been acquired.
-func (collection *ProxyCollection) getByName(name string) (*Proxy, error) {
+func (collection *ProxyCollection) getByName(name string) (Proxy, error) {
 	proxy, exists := collection.proxies[name]
 	if !exists {
 		return nil, ErrProxyNotFound

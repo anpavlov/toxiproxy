@@ -20,7 +20,7 @@ func TestBandwidthToxic(t *testing.T) {
 	proxy.Start()
 	defer proxy.Stop()
 
-	client, err := net.Dial("tcp", proxy.Listen)
+	client, err := net.Dial("tcp", proxy.Listen())
 	if err != nil {
 		t.Fatalf("Unable to dial TCP server: %v", err)
 	}
@@ -28,7 +28,7 @@ func TestBandwidthToxic(t *testing.T) {
 	upstreamConn := <-upstream.Connections
 
 	rate := 1000 // 1MB/s
-	proxy.Toxics.AddToxicJson(
+	proxy.Toxics().AddToxicJson(
 		ToxicToJson(t, "", "bandwidth", "upstream", &toxics.BandwidthToxic{Rate: int64(rate)}),
 	)
 
@@ -66,14 +66,14 @@ func BenchmarkBandwidthToxic100MB(b *testing.B) {
 	proxy.Start()
 	defer proxy.Stop()
 
-	client, err := net.Dial("tcp", proxy.Listen)
+	client, err := net.Dial("tcp", proxy.Listen())
 	if err != nil {
 		b.Error("Unable to dial TCP server", err)
 	}
 
 	writtenPayload := []byte(strings.Repeat("hello world ", 1000))
 
-	proxy.Toxics.AddToxicJson(
+	proxy.Toxics().AddToxicJson(
 		ToxicToJson(nil, "", "bandwidth", "upstream", &toxics.BandwidthToxic{Rate: 100 * 1000}),
 	)
 

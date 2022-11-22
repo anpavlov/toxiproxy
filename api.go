@@ -162,7 +162,7 @@ func (server *ApiServer) ResetState(response http.ResponseWriter, request *http.
 			return
 		}
 
-		proxy.Toxics.ResetToxics(ctx)
+		proxy.Toxics().ResetToxics(ctx)
 	}
 
 	response.WriteHeader(http.StatusNoContent)
@@ -175,7 +175,7 @@ func (server *ApiServer) ResetState(response http.ResponseWriter, request *http.
 
 func (server *ApiServer) ProxyCreate(response http.ResponseWriter, request *http.Request) {
 	// Default fields to enable the proxy right away
-	input := Proxy{Enabled: true}
+	input := ProxyConfig{Enabled: true}
 	err := json.NewDecoder(request.Body).Decode(&input)
 	if server.apiError(response, joinError(err, ErrBadRequestBody)) {
 		return
@@ -272,13 +272,13 @@ func (server *ApiServer) ProxyUpdate(response http.ResponseWriter, request *http
 	}
 
 	// Default fields are the same as existing proxy
-	input := Proxy{Listen: proxy.Listen, Upstream: proxy.Upstream, Enabled: proxy.Enabled}
+	input := ProxyConfig{Listen: proxy.Listen(), Upstream: proxy.Upstream(), Enabled: proxy.Enabled()}
 	err = json.NewDecoder(request.Body).Decode(&input)
 	if server.apiError(response, joinError(err, ErrBadRequestBody)) {
 		return
 	}
 
-	err = proxy.Update(&input)
+	err = proxy.Update(input)
 	if server.apiError(response, err) {
 		return
 	}
@@ -320,7 +320,7 @@ func (server *ApiServer) ToxicIndex(response http.ResponseWriter, request *http.
 		return
 	}
 
-	toxics := proxy.Toxics.GetToxicArray()
+	toxics := proxy.Toxics().GetToxicArray()
 	data, err := json.Marshal(toxics)
 	if server.apiError(response, err) {
 		return
@@ -342,7 +342,7 @@ func (server *ApiServer) ToxicCreate(response http.ResponseWriter, request *http
 		return
 	}
 
-	toxic, err := proxy.Toxics.AddToxicJson(request.Body)
+	toxic, err := proxy.Toxics().AddToxicJson(request.Body)
 	if server.apiError(response, err) {
 		return
 	}
@@ -368,7 +368,7 @@ func (server *ApiServer) ToxicShow(response http.ResponseWriter, request *http.R
 		return
 	}
 
-	toxic := proxy.Toxics.GetToxic(vars["toxic"])
+	toxic := proxy.Toxics().GetToxic(vars["toxic"])
 	if toxic == nil {
 		server.apiError(response, ErrToxicNotFound)
 		return
@@ -395,7 +395,7 @@ func (server *ApiServer) ToxicUpdate(response http.ResponseWriter, request *http
 		return
 	}
 
-	toxic, err := proxy.Toxics.UpdateToxicJson(vars["toxic"], request.Body)
+	toxic, err := proxy.Toxics().UpdateToxicJson(vars["toxic"], request.Body)
 	if server.apiError(response, err) {
 		return
 	}
@@ -423,7 +423,7 @@ func (server *ApiServer) ToxicDelete(response http.ResponseWriter, request *http
 		return
 	}
 
-	err = proxy.Toxics.RemoveToxic(ctx, vars["toxic"])
+	err = proxy.Toxics().RemoveToxic(ctx, vars["toxic"])
 	if server.apiError(response, err) {
 		return
 	}
@@ -500,17 +500,17 @@ func (server *ApiServer) apiError(resp http.ResponseWriter, err error) bool {
 }
 
 type proxyToxics struct {
-	*Proxy
+	ProxyConfig
 	Toxics []toxics.Toxic `json:"toxics"`
 }
 
-func proxyWithToxics(proxy *Proxy) (result proxyToxics) {
-	result.Proxy = proxy
-	result.Toxics = proxy.Toxics.GetToxicArray()
+func proxyWithToxics(proxy Proxy) (result proxyToxics) {
+	result.ProxyConfig = proxy.Config()
+	result.Toxics = proxy.Toxics().GetToxicArray()
 	return
 }
 
-func proxiesWithToxics(proxies []*Proxy) (result []proxyToxics) {
+func proxiesWithToxics(proxies []Proxy) (result []proxyToxics) {
 	for _, proxy := range proxies {
 		result = append(result, proxyWithToxics(proxy))
 	}

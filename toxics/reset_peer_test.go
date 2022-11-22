@@ -78,7 +78,7 @@ func resetTCPHelper(t *testing.T, toxicJSON io.Reader) {
 	defer ln.Close()
 	proxy := NewTestProxy("test", ln.Addr().String())
 	proxy.Start()
-	proxy.Toxics.AddToxicJson(toxicJSON)
+	proxy.Toxics().AddToxicJson(toxicJSON)
 	defer proxy.Stop()
 
 	go func() {
@@ -92,5 +92,5 @@ func resetTCPHelper(t *testing.T, toxicJSON io.Reader) {
 			conn.Write([]byte(msg))
 		}
 	}()
-	checkConnectionState(t, proxy.Listen)
+	checkConnectionState(t, proxy.Listen())
 }

@@ -22,12 +22,12 @@ type ToxicCollection struct {
 	sync.Mutex
 
 	noop  *toxics.ToxicWrapper
-	proxy *Proxy
+	proxy Proxy
 	chain [][]*toxics.ToxicWrapper
 	links map[string]*ToxicLink
 }
 
-func NewToxicCollection(proxy *Proxy) *ToxicCollection {
+func NewToxicCollection(proxy Proxy) *ToxicCollection {
 	collection := &ToxicCollection{
 		noop: &toxics.ToxicWrapper{
 			Toxic: new(toxics.NoopToxic),
@@ -165,7 +165,7 @@ func (c *ToxicCollection) RemoveToxic(ctx context.Context, name string) error {
 		Str("component", "ToxicCollection").
 		Str("method", "RemoveToxic").
 		Str("toxic", name).
-		Str("proxy", c.proxy.Name).
+		Str("proxy", c.proxy.Name()).
 		Logger()
 	log.Trace().Msg("Acquire locking...")
 	c.Lock()
@@ -194,8 +194,8 @@ func (c *ToxicCollection) StartLink(
 	defer c.Unlock()
 
 	var logger zerolog.Logger
-	if c.proxy.Logger != nil {
-		logger = *c.proxy.Logger
+	if c.proxy.Logger() != nil {
+		logger = *c.proxy.Logger()
 	} else {
 		logger = zerolog.Nop()
 	}

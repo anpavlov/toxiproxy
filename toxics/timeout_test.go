@@ -13,7 +13,7 @@ import (
 	"github.com/Shopify/toxiproxy/v2/toxics"
 )
 
-func WithEstablishedProxy(t *testing.T, f func(net.Conn, net.Conn, *toxiproxy.Proxy)) {
+func WithEstablishedProxy(t *testing.T, f func(net.Conn, net.Conn, *toxiproxy.ProxyTCP)) {
 	ln, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatal("Failed to create TCP server", err)
@@ -33,7 +33,7 @@ func WithEstablishedProxy(t *testing.T, f func(net.Conn, net.Conn, *toxiproxy.Pr
 		serverConnRecv <- conn
 	}()
 
-	conn, err := net.Dial("tcp", proxy.Listen)
+	conn, err := net.Dial("tcp", proxy.Listen())
 	if err != nil {
 		t.Fatal("Unable to dial TCP server", err)
 	}
@@ -69,11 +69,11 @@ func WithEstablishedProxy(t *testing.T, f func(net.Conn, net.Conn, *toxiproxy.Pr
 }
 
 func TestTimeoutToxicDoesNotCauseHang(t *testing.T) {
-	WithEstablishedProxy(t, func(conn, _ net.Conn, proxy *toxiproxy.Proxy) {
-		proxy.Toxics.AddToxicJson(
+	WithEstablishedProxy(t, func(conn, _ net.Conn, proxy *toxiproxy.ProxyTCP) {
+		proxy.Toxics().AddToxicJson(
 			ToxicToJson(t, "might_block", "latency", "upstream", &toxics.LatencyToxic{Latency: 10}),
 		)
-		proxy.Toxics.AddToxicJson(
+		proxy.Toxics().AddToxicJson(
 			ToxicToJson(t, "timeout", "timeout", "upstream", &toxics.TimeoutToxic{Timeout: 0}),
 		)
 
@@ -86,7 +86,7 @@ func TestTimeoutToxicDoesNotCauseHang(t *testing.T) {
 		}
 
 		err := testhelper.TimeoutAfter(time.Second, func() {
-			proxy.Toxics.RemoveToxic(context.Background(), "might_block")
+			proxy.Toxics().RemoveToxic(context.Background(), "might_block")
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -95,12 +95,12 @@ func TestTimeoutToxicDoesNotCauseHang(t *testing.T) {
 }
 
 func TestTimeoutToxicClosesConnectionOnRemove(t *testing.T) {
-	WithEstablishedProxy(t, func(conn, serverConn net.Conn, proxy *toxiproxy.Proxy) {
-		proxy.Toxics.AddToxicJson(
+	WithEstablishedProxy(t, func(conn, serverConn net.Conn, proxy *toxiproxy.ProxyTCP) {
+		proxy.Toxics().AddToxicJson(
 			ToxicToJson(t, "to_delete", "timeout", "upstream", &toxics.TimeoutToxic{Timeout: 0}),
 		)
 
-		proxy.Toxics.RemoveToxic(context.Background(), "to_delete")
+		proxy.Toxics().RemoveToxic(context.Background(), "to_delete")
 
 		err := testhelper.TimeoutAfter(time.Second, func() {
 			buf := make([]byte, 1)

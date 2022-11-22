@@ -28,8 +28,8 @@ func TestProxyMetricsReceivedSentBytes(t *testing.T) {
 		bufio.NewWriter(bytes.NewBuffer([]byte{})),
 	}
 	linkName := "testupstream"
-	proxy.Toxics.StartLink(srv, linkName, r, w, stream.Upstream)
-	proxy.Toxics.RemoveLink(linkName)
+	proxy.Toxics().StartLink(srv, linkName, r, w, stream.Upstream)
+	proxy.Toxics().RemoveLink(linkName)
 
 	actual := prometheusOutput(t, srv, "toxiproxy_proxy")
 

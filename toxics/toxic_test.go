@@ -22,10 +22,14 @@ import (
 	"github.com/Shopify/toxiproxy/v2/toxics"
 )
 
-func NewTestProxy(name, upstream string) *toxiproxy.Proxy {
+func NewTestProxy(name, upstream string) *toxiproxy.ProxyTCP {
+	log := zerolog.Nop()
+	if flag.Lookup("test.v").DefValue == "true" {
+		log = zerolog.New(os.Stdout).With().Caller().Timestamp().Logger()
+	}
 	srv := toxiproxy.NewServer(
 		toxiproxy.NewMetricsContainer(prometheus.NewRegistry()),
-		zerolog.Nop(),
+		log,
 	)
 	srv.Metrics.ProxyMetrics = collectors.NewProxyMetricCollectors()
 	proxy := toxiproxy.NewProxy(srv, name, "localhost:0", upstream)
@@ -79,13 +83,13 @@ func WithEchoServer(t *testing.T, f func(string, chan []byte)) {
 
 func WithEchoProxy(
 	t *testing.T,
-	f func(proxy net.Conn, response chan []byte, proxyServer *toxiproxy.Proxy),
+	f func(proxy net.Conn, response chan []byte, proxyServer *toxiproxy.ProxyTCP),
 ) {
 	WithEchoServer(t, func(upstream string, response chan []byte) {
 		proxy := NewTestProxy("test", upstream)
 		proxy.Start()
 
-		conn, err := net.Dial("tcp", proxy.Listen)
+		conn, err := net.Dial("tcp", proxy.Listen())
 		if err != nil {
 			t.Error("Unable to dial TCP server", err)
 		}
@@ -169,25 +173,25 @@ func TestPersistentConnections(t *testing.T) {
 		serverConnRecv <- conn
 	}()
 
-	conn, err := net.Dial("tcp", proxy.Listen)
+	conn, err := net.Dial("tcp", proxy.Listen())
 	if err != nil {
 		t.Error("Unable to dial TCP server", err)
 	}
 
 	serverConn := <-serverConnRecv
 
-	proxy.Toxics.AddToxicJson(ToxicToJson(t, "noop_up", "noop", "upstream", &toxics.NoopToxic{}))
-	proxy.Toxics.AddToxicJson(
+	proxy.Toxics().AddToxicJson(ToxicToJson(t, "noop_up", "noop", "upstream", &toxics.NoopToxic{}))
+	proxy.Toxics().AddToxicJson(
 		ToxicToJson(t, "noop_down", "noop", "downstream", &toxics.NoopToxic{}),
 	)
 
 	AssertEchoResponse(t, conn, serverConn)
 
-	proxy.Toxics.ResetToxics(ctx)
+	proxy.Toxics().ResetToxics(ctx)
 
 	AssertEchoResponse(t, conn, serverConn)
 
-	proxy.Toxics.ResetToxics(ctx)
+	proxy.Toxics().ResetToxics(ctx)
 
 	AssertEchoResponse(t, conn, serverConn)
 
@@ -219,7 +223,7 @@ func TestToxicAddRemove(t *testing.T) {
 		serverConnRecv <- conn
 	}()
 
-	conn, err := net.Dial("tcp", proxy.Listen)
+	conn, err := net.Dial("tcp", proxy.Listen())
 	if err != nil {
 		t.Error("Unable to dial TCP server", err)
 	}
@@ -235,13 +239,13 @@ func TestToxicAddRemove(t *testing.T) {
 				return
 			default:
 				if enabled {
-					proxy.Toxics.AddToxicJson(
+					proxy.Toxics().AddToxicJson(
 						ToxicToJson(t, "noop_up", "noop", "upstream", &toxics.NoopToxic{}),
 					)
-					proxy.Toxics.RemoveToxic(context.Background(), "noop_down")
+					proxy.Toxics().RemoveToxic(context.Background(), "noop_down")
 				} else {
-					proxy.Toxics.RemoveToxic(context.Background(), "noop_up")
-					proxy.Toxics.AddToxicJson(
+					proxy.Toxics().RemoveToxic(context.Background(), "noop_up")
+					proxy.Toxics().AddToxicJson(
 						ToxicToJson(t, "noop_down", "noop", "downstream", &toxics.NoopToxic{}),
 					)
 				}
@@ -283,7 +287,7 @@ func TestProxyLatency(t *testing.T) {
 		serverConnRecv <- conn
 	}()
 
-	conn, err := net.Dial("tcp", proxy.Listen)
+	conn, err := net.Dial("tcp", proxy.Listen())
 	if err != nil {
 		t.Error("Unable to dial TCP server", err)
 	}
@@ -332,7 +336,7 @@ func BenchmarkProxyBandwidth(b *testing.B) {
 		}
 	}()
 
-	conn, err := net.Dial("tcp", proxy.Listen)
+	conn, err := net.Dial("tcp", proxy.Listen())
 	if err != nil {
 		b.Error("Unable to dial TCP server", err)
 	}

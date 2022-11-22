@@ -23,7 +23,7 @@ import (
 // | Input > ToxicStub > ToxicStub > Output.
 type ToxicLink struct {
 	stubs     []*toxics.ToxicStub
-	proxy     *Proxy
+	proxy     Proxy
 	toxics    *ToxicCollection
 	input     *stream.ChanWriter
 	output    *stream.ChanReader
@@ -32,7 +32,7 @@ type ToxicLink struct {
 }
 
 func NewToxicLink(
-	proxy *Proxy,
+	proxy Proxy,
 	collection *ToxicCollection,
 	direction stream.Direction,
 	logger zerolog.Logger,
@@ -81,9 +81,9 @@ func (link *ToxicLink) Start(
 
 	labels := []string{
 		link.Direction(),
-		link.proxy.Name,
-		link.proxy.Listen,
-		link.proxy.Upstream}
+		link.proxy.Name(),
+		link.proxy.Listen(),
+		link.proxy.Upstream()}
 
 	go link.read(labels, server, source)
 
@@ -145,7 +145,7 @@ func (link *ToxicLink) write(
 		Str("component", "ToxicLink").
 		Str("method", "write").
 		Str("link", name).
-		Str("proxy", link.proxy.Name).
+		Str("proxy", link.proxy.Name()).
 		Str("link_addr", fmt.Sprintf("%p", link)).
 		Logger()
 
@@ -163,7 +163,7 @@ func (link *ToxicLink) write(
 	dest.Close()
 	logger.Trace().Msgf("Remove link %s from ToxicCollection", name)
 	link.toxics.RemoveLink(name)
-	logger.Trace().Msgf("RemoveConnection %s from Proxy %s", name, link.proxy.Name)
+	logger.Trace().Msgf("RemoveConnection %s from Proxy %s", name, link.proxy.Name())
 	link.proxy.RemoveConnection(name)
 }
 

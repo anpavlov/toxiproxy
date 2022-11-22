@@ -35,11 +35,11 @@ func AssertDeltaTime(t *testing.T, message string, actual, expected, delta time.
 }
 
 func DoLatencyTest(t *testing.T, upLatency, downLatency *toxics.LatencyToxic) {
-	WithEchoProxy(t, func(conn net.Conn, response chan []byte, proxy *toxiproxy.Proxy) {
+	WithEchoProxy(t, func(conn net.Conn, response chan []byte, proxy *toxiproxy.ProxyTCP) {
 		if upLatency == nil {
 			upLatency = &toxics.LatencyToxic{}
 		} else {
-			_, err := proxy.Toxics.AddToxicJson(
+			_, err := proxy.Toxics().AddToxicJson(
 				ToxicToJson(t, "latency_up", "latency", "upstream", upLatency),
 			)
 			if err != nil {
@@ -49,7 +49,7 @@ func DoLatencyTest(t *testing.T, upLatency, downLatency *toxics.LatencyToxic) {
 		if downLatency == nil {
 			downLatency = &toxics.LatencyToxic{}
 		} else {
-			_, err := proxy.Toxics.AddToxicJson(
+			_, err := proxy.Toxics().AddToxicJson(
 				ToxicToJson(t, "latency_down", "latency", "downstream", downLatency),
 			)
 			if err != nil {
@@ -105,8 +105,8 @@ func DoLatencyTest(t *testing.T, upLatency, downLatency *toxics.LatencyToxic) {
 		)
 
 		ctx := context.Background()
-		proxy.Toxics.RemoveToxic(ctx, "latency_up")
-		proxy.Toxics.RemoveToxic(ctx, "latency_down")
+		proxy.Toxics().RemoveToxic(ctx, "latency_up")
+		proxy.Toxics().RemoveToxic(ctx, "latency_down")
 
 		err = conn.Close()
 		if err != nil {
@@ -162,24 +162,24 @@ func TestLatencyToxicCloseRace(t *testing.T) {
 
 	// Check for potential race conditions when interrupting toxics
 	for i := 0; i < 1000; i++ {
-		proxy.Toxics.AddToxicJson(
+		proxy.Toxics().AddToxicJson(
 			ToxicToJson(t, "", "latency", "upstream", &toxics.LatencyToxic{Latency: 10}),
 		)
-		conn, err := net.Dial("tcp", proxy.Listen)
+		conn, err := net.Dial("tcp", proxy.Listen())
 		if err != nil {
 			t.Error("Unable to dial TCP server", err)
 		}
 		conn.Write([]byte("hello"))
 		conn.Close()
-		proxy.Toxics.RemoveToxic(context.Background(), "latency")
+		proxy.Toxics().RemoveToxic(context.Background(), "latency")
 	}
 }
 
 func TestTwoLatencyToxics(t *testing.T) {
-	WithEchoProxy(t, func(conn net.Conn, response chan []byte, proxy *toxiproxy.Proxy) {
+	WithEchoProxy(t, func(conn net.Conn, response chan []byte, proxy *toxiproxy.ProxyTCP) {
 		toxics := []*toxics.LatencyToxic{{Latency: 500}, {Latency: 500}}
 		for i, toxic := range toxics {
-			_, err := proxy.Toxics.AddToxicJson(
+			_, err := proxy.Toxics().AddToxicJson(
 				ToxicToJson(t, "latency_"+strconv.Itoa(i), "latency", "upstream", toxic),
 			)
 			if err != nil {
@@ -208,7 +208,7 @@ func TestTwoLatencyToxics(t *testing.T) {
 		)
 
 		for i := range toxics {
-			proxy.Toxics.RemoveToxic(context.Background(), "latency_"+strconv.Itoa(i))
+			proxy.Toxics().RemoveToxic(context.Background(), "latency_"+strconv.Itoa(i))
 		}
 
 		err = conn.Close()
@@ -226,7 +226,7 @@ func TestLatencyToxicBandwidth(t *testing.T) {
 	proxy.Start()
 	defer proxy.Stop()
 
-	client, err := net.Dial("tcp", proxy.Listen)
+	client, err := net.Dial("tcp", proxy.Listen())
 	if err != nil {
 		t.Fatalf("Unable to dial TCP server: %v", err)
 	}
@@ -240,7 +240,7 @@ func TestLatencyToxicBandwidth(t *testing.T) {
 		}
 	}(upstreamConn, writtenPayload)
 
-	proxy.Toxics.AddToxicJson(ToxicToJson(t, "", "latency", "", &toxics.LatencyToxic{Latency: 100}))
+	proxy.Toxics().AddToxicJson(ToxicToJson(t, "", "latency", "", &toxics.LatencyToxic{Latency: 100}))
 
 	time.Sleep(150 * time.Millisecond) // Wait for latency toxic
 	response := make([]byte, len(writtenPayload))

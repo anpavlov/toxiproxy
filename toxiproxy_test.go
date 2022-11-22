@@ -12,10 +12,14 @@ import (
 	"github.com/Shopify/toxiproxy/v2/testhelper"
 )
 
-func NewTestProxy(name, upstream string) *toxiproxy.Proxy {
+func NewTestProxy(name, upstream string) toxiproxy.Proxy {
+	log := zerolog.Nop()
+	if flag.Lookup("test.v").DefValue == "true" {
+		log = zerolog.New(os.Stdout).With().Caller().Timestamp().Logger()
+	}
 	srv := toxiproxy.NewServer(
 		toxiproxy.NewMetricsContainer(prometheus.NewRegistry()),
-		zerolog.Nop(),
+		log,
 	)
 	srv.Metrics.ProxyMetrics = collectors.NewProxyMetricCollectors()
 	proxy := toxiproxy.NewProxy(srv, name, "localhost:0", upstream)
@@ -25,13 +29,13 @@ func NewTestProxy(name, upstream string) *toxiproxy.Proxy {
 
 func WithTCPProxy(
 	t *testing.T,
-	f func(proxy net.Conn, response chan []byte, proxyServer *toxiproxy.Proxy),
+	f func(proxy net.Conn, response chan []byte, proxyServer toxiproxy.Proxy),
 ) {
 	testhelper.WithTCPServer(t, func(upstream string, response chan []byte) {
 		proxy := NewTestProxy("test", upstream)
 		proxy.Start()
 
-		conn := AssertProxyUp(t, proxy.Listen, true)
+		conn := AssertProxyUp(t, proxy.Listen(), true)
 
 		f(conn, response, proxy)
 
