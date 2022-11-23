@@ -43,7 +43,7 @@ func NewProxyUdp(server *ApiServer, name, listen, upstream string) Proxy {
 			logger:      &l,
 		},
 	}
-	// proxy.Toxics = NewToxicCollection(proxy)
+	proxy.toxics = NewToxicCollection(proxy)
 	return proxy
 }
 
