@@ -27,6 +27,21 @@ func NewTestProxy(name, upstream string) toxiproxy.Proxy {
 	return proxy
 }
 
+func NewTestUDPProxy(name, upstream string) toxiproxy.Proxy {
+	log := zerolog.Nop()
+	if flag.Lookup("test.v").DefValue == "true" {
+		log = zerolog.New(os.Stdout).With().Caller().Timestamp().Logger()
+	}
+	srv := toxiproxy.NewServer(
+		toxiproxy.NewMetricsContainer(prometheus.NewRegistry()),
+		log,
+	)
+	srv.Metrics.ProxyMetrics = collectors.NewProxyMetricCollectors()
+	proxy := toxiproxy.NewProxyUdp(srv, name, "localhost:0", upstream)
+
+	return proxy
+}
+
 func WithTCPProxy(
 	t *testing.T,
 	f func(proxy net.Conn, response chan []byte, proxyServer toxiproxy.Proxy),
@@ -40,6 +55,30 @@ func WithTCPProxy(
 		f(conn, response, proxy)
 
 		proxy.Stop()
+	})
+}
+
+func WithUDPProxy(
+	t *testing.T,
+	f func(proxy *net.UDPConn, proxyServer toxiproxy.Proxy),
+) {
+	testhelper.WithUDPServer(t, func(upstream string) {
+		proxy := NewTestUDPProxy("test", upstream)
+		proxy.Start()
+		defer proxy.Stop()
+
+		raddr, err := net.ResolveUDPAddr("udp", proxy.Listen())
+		if err != nil {
+			t.Error("Failed to resolve proxy listen udp addr:", err)
+		}
+
+		conn, err := net.DialUDP("udp", nil, raddr)
+		if err != nil {
+			t.Error("Failed to dial udp proxy:", err)
+		}
+		defer conn.Close()
+
+		f(conn, proxy)
 	})
 }
 
