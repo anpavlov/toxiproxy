@@ -2,6 +2,7 @@ package toxiproxy
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"net"
 
@@ -21,7 +22,7 @@ type ProxyUDP struct {
 	listener *net.UDPConn
 }
 
-const UDPBufferSize = 65536
+const UDPBufferSize = 64 * 1024
 
 func NewProxyUdp(server *ApiServer, name, listen, upstream string) Proxy {
 	l := server.Logger.
@@ -195,20 +196,22 @@ func (proxy *ProxyUDP) server() {
 		// Buffered read writer is used to ensure whole UDP packet always fits
 		// in read write buffers, futher calls to io.Copy in Links will use bufferedUpstream
 		// buffers, so UDP packet will always be written to upstream with one Write call
-		bufferedUpstream := NewReadWriteBufferCloser(upstream, UDPBufferSize)
+		bufferedUpstreamReader := bufio.NewReaderSize(upstream, UDPBufferSize)
+		// It is impossible to use bufio.Writer here, see makeBufferedPipe(int)
+		bufferedUpstreamWriter := NewBufferedWriter(upstream, UDPBufferSize)
 
 		go proxy.clientWrite(remoteAddr, clientDownPipeReader)
 
 		proxy.connections.Lock()
-		proxy.connections.list[name+"upstream"] = bufferedUpstream
+		proxy.connections.list[name+"upstream"] = upstream
 		proxy.connections.list[name+"downstream"] = clientUpPipeWriter
 		proxy.connections.Unlock()
 
 		// Links will never be closed themselves, because UDP has no living "connection"
 		// the only way is to close unused links after some time of inactivity
 		// TODO make some timeout for unused connections
-		proxy.toxics.StartLink(proxy.apiServer, name+"upstream", clientUpPipeReader, bufferedUpstream, stream.Upstream)
-		proxy.toxics.StartLink(proxy.apiServer, name+"downstream", bufferedUpstream, clientDownPipeWriter, stream.Downstream)
+		proxy.toxics.StartLink(proxy.apiServer, name+"upstream", clientUpPipeReader, bufferedUpstreamWriter, stream.Upstream)
+		proxy.toxics.StartLink(proxy.apiServer, name+"downstream", bufferedUpstreamReader, clientDownPipeWriter, stream.Downstream)
 
 		clientUpPipeWriter.Write(buffer[:msglen])
 	}
@@ -233,50 +236,58 @@ func (proxy *ProxyUDP) clientWrite(clientAddr *net.UDPAddr, reader io.Reader) {
 
 func makeBufferedPipe(size int) (io.Reader, io.WriteCloser) {
 	reader, writer := io.Pipe()
-	bufferedWriter := NewWriteBufferCloser(writer, size)
+	bufferedWriter := NewBufferedWriter(writer, size)
+	// It is impossible to use bufio.Writer here to make use of ReadFrom,
+	// beacuse bufio.Writer writes data to the wrapped io.Writer only
+	// when its internal buffer is full
 	bufferedReader := bufio.NewReaderSize(reader, size)
 	return bufferedReader, bufferedWriter
 }
 
-func NewReadWriteBufferCloser(rw io.ReadWriteCloser, size int) *ReadWriteBufferCloser {
-	return &ReadWriteBufferCloser{
-		ReadWriter: bufio.NewReadWriter(
-			bufio.NewReaderSize(rw, size),
-			bufio.NewWriterSize(rw, size),
-		),
-		closer: rw,
-	}
-}
-
-// ReadWriteBufferCloser implements io.Closer interface,
-// ensuring wrapped ReadWriteCloser can be closed
-type ReadWriteBufferCloser struct {
-	*bufio.ReadWriter
-	closer io.Closer
-}
-
-func (rw *ReadWriteBufferCloser) Close() error {
-	if err := rw.Flush(); err != nil {
-		return err
-	}
-	return rw.closer.Close()
-}
-
-func NewWriteBufferCloser(w io.WriteCloser, size int) *WriteBufferCloser {
+func NewBufferedWriter(w io.WriteCloser, size int) io.WriteCloser {
 	return &WriteBufferCloser{
-		Writer: bufio.NewWriterSize(w, size),
-		closer: w,
+		wr:   w,
+		size: size,
 	}
 }
 
+// Implements ReaderFrom interface with custom sized buffer,
+// but writes data after each Read call, opposed to bufio.Writer,
+// which waits till buffer is full
 type WriteBufferCloser struct {
-	*bufio.Writer
-	closer io.Closer
+	wr   io.WriteCloser
+	size int
 }
 
-func (w *WriteBufferCloser) Close() error {
-	if err := w.Flush(); err != nil {
-		return err
+func (wb *WriteBufferCloser) Write(p []byte) (int, error) {
+	return wb.wr.Write(p)
+}
+
+func (wb *WriteBufferCloser) ReadFrom(r io.Reader) (n int64, err error) {
+	buffer := make([]byte, wb.size)
+	for {
+		nr, err := r.Read(buffer)
+		if err != nil {
+			break
+		}
+		if nr == 0 {
+			continue
+		}
+		nw, err := wb.wr.Write(buffer[:nr])
+		n += int64(nw)
+		if err != nil {
+			return n, err
+		}
+		if nw != nr {
+			return n, fmt.Errorf("Failed to write all read buffer")
+		}
 	}
-	return w.closer.Close()
+	if err == io.EOF {
+		err = nil
+	}
+	return n, err
+}
+
+func (wb *WriteBufferCloser) Close() error {
+	return wb.wr.Close()
 }
