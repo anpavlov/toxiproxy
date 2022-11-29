@@ -9,6 +9,7 @@ import (
 	tomb "gopkg.in/tomb.v1"
 
 	"github.com/Shopify/toxiproxy/v2/stream"
+	"github.com/rs/zerolog"
 )
 
 // ProxyUDP represents the proxy in its entirety with all its links. The main
@@ -25,13 +26,16 @@ type ProxyUDP struct {
 const UDPBufferSize = 64 * 1024
 
 func NewProxyUdp(server *ApiServer, name, listen, upstream string) Proxy {
-	l := server.Logger.
-		With().
-		Str("name", name).
-		Str("listen", listen).
-		Str("upstream", upstream).
-		Str("protocol", "udp").
-		Logger()
+	l := zerolog.Nop()
+	if server != nil {
+		l = server.Logger.
+			With().
+			Str("name", name).
+			Str("listen", listen).
+			Str("upstream", upstream).
+			Str("protocol", "udp").
+			Logger()
+	}
 
 	proxy := &ProxyUDP{
 		proxyBase: proxyBase{

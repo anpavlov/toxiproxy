@@ -7,6 +7,7 @@ import (
 	tomb "gopkg.in/tomb.v1"
 
 	"github.com/Shopify/toxiproxy/v2/stream"
+	"github.com/rs/zerolog"
 )
 
 // ProxyTCP represents the proxy in its entirety with all its links. The main
@@ -21,12 +22,15 @@ type ProxyTCP struct {
 }
 
 func NewProxyTCP(server *ApiServer, name, listen, upstream string) Proxy {
-	l := server.Logger.
-		With().
-		Str("name", name).
-		Str("listen", listen).
-		Str("upstream", upstream).
-		Logger()
+	l := zerolog.Nop()
+	if server != nil {
+		l = server.Logger.
+			With().
+			Str("name", name).
+			Str("listen", listen).
+			Str("upstream", upstream).
+			Logger()
+	}
 
 	proxy := &ProxyTCP{
 		proxyBase: proxyBase{
