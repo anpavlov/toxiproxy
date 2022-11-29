@@ -131,6 +131,35 @@ func (c *ToxicCollection) AddToxicJson(data io.Reader) (*toxics.ToxicWrapper, er
 	return wrapper, nil
 }
 
+func (c *ToxicCollection) AddToxic(
+	name string,
+	direction string,
+	toxicity float32,
+	toxic toxics.Toxic,
+) (*toxics.ToxicWrapper, error) {
+	c.Lock()
+	defer c.Unlock()
+
+	found := c.findToxicByName(name)
+	if found != nil {
+		return nil, ErrToxicAlreadyExists
+	}
+
+	wrapper := &toxics.ToxicWrapper{
+		Name:     name,
+		Stream:   direction,
+		Toxicity: 1.0,
+		Toxic:    toxic,
+	}
+	var err error
+	wrapper.Direction, err = stream.ParseDirection(wrapper.Stream)
+	if err != nil {
+		return nil, ErrInvalidStream
+	}
+	c.chainAddToxic(wrapper)
+	return wrapper, nil
+}
+
 func (c *ToxicCollection) UpdateToxicJson(
 	name string,
 	data io.Reader,
@@ -152,6 +181,25 @@ func (c *ToxicCollection) UpdateToxicJson(
 			return nil, joinError(err, ErrBadRequestBody)
 		}
 		toxic.Toxicity = attrs.Toxicity
+
+		c.chainUpdateToxic(toxic)
+		return toxic, nil
+	}
+	return nil, ErrToxicNotFound
+}
+
+func (c *ToxicCollection) UpdateToxic(
+	name string,
+	toxicity float32,
+	newToxic toxics.Toxic,
+) (*toxics.ToxicWrapper, error) {
+	c.Lock()
+	defer c.Unlock()
+
+	toxic := c.findToxicByName(name)
+	if toxic != nil {
+		toxic.Toxicity = toxicity
+		toxic.Toxic = newToxic
 
 		c.chainUpdateToxic(toxic)
 		return toxic, nil
