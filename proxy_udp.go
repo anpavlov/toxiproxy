@@ -157,11 +157,11 @@ func (proxy *ProxyUDP) server() {
 		}
 
 		name := remoteAddr.String()
-		if v, ok := proxy.connections.list[name+"upstream"]; ok {
+		if v, ok := proxy.connections.list[name+"downstream"]; ok {
 			if writer, ok := v.(io.Writer); ok {
 				writer.Write(buffer[:msglen])
 			} else {
-				panic("downstream writer ")
+				panic("downstream writer")
 			}
 			continue
 		}
