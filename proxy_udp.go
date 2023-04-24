@@ -157,7 +157,10 @@ func (proxy *ProxyUDP) server() {
 		}
 
 		name := remoteAddr.String()
-		if v, ok := proxy.connections.list[name+"downstream"]; ok {
+		proxy.connections.RLock()
+		v, ok := proxy.connections.list[name+"downstream"]
+		proxy.connections.RUnlock()
+		if ok {
 			if writer, ok := v.(io.Writer); ok {
 				writer.Write(buffer[:msglen])
 			} else {

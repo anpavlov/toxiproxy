@@ -45,11 +45,19 @@ type proxyInternal interface {
 
 type ConnectionList struct {
 	list map[string]io.Closer
-	lock sync.Mutex
+	lock sync.RWMutex
 }
 
 func (c *ConnectionList) Lock() {
 	c.lock.Lock()
+}
+
+func (c *ConnectionList) RLock() {
+	c.lock.RLock()
+}
+
+func (c *ConnectionList) RUnlock() {
+	c.lock.RUnlock()
 }
 
 func (c *ConnectionList) Unlock() {
